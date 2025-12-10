@@ -54,3 +54,4 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+pydantic-bq-*.json

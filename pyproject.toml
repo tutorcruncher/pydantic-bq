@@ -3,7 +3,7 @@ name = "pydantic-bq"
 version = "0.1.0"
 description = "Pydantic-based BigQuery client for type-safe schema definition and data operations"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "TutorCruncher"}
@@ -14,24 +14,25 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Database",
 ]
 
 dependencies = [
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
-    "google-cloud-bigquery>=3.0.0",
-    "google-auth>=2.0.0",
-    "pandas>=2.3.3",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.12",
+    "google-cloud-bigquery>=3.38",
+    "google-auth>=2.43",
+    "pandas>=2.3",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.1.0",
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
+    "pytest-sugar==1.1.1",
+    "ruff>=0.14",
+    "coverage>=7.13",
 ]
 
 [build-system]
@@ -41,7 +42,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["pydantic_bq"]
 
+[tool.pytest.ini_options]
+markers = [
+    "e2e: marks tests as end-to-end (require real BigQuery credentials)",
+]
+
 [tool.ruff]
+target-version = "py312"
 line-length = 120
 
 [tool.ruff.lint]

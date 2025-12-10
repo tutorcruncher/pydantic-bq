@@ -1,8 +1,5 @@
 """BigQuery client with Pydantic model support."""
 
-import base64
-import json
-import os
 import time
 from dataclasses import dataclass
 from io import BytesIO
@@ -11,11 +8,11 @@ from typing import Any, Type
 
 from google.api_core.exceptions import Forbidden, NotFound
 from google.cloud import bigquery
-from google.cloud.bigquery import DatasetReference, LoadJob, TableReference
+from google.cloud.bigquery import DatasetReference, TableReference
 from google.oauth2 import service_account
 
 from .schema import BQBaseModel
-from .settings import Settings, settings as default_settings
+from .settings import settings
 from .types import logger
 
 
@@ -39,81 +36,32 @@ def job_result(job, retry=1):
         raise
 
 
-def create_client(
-    credentials_base64: str = None,
-    credentials_json: str = None,
-    credentials_file: str = None,
-    credentials_dict: dict = None,
-    settings: Settings = None,
-) -> bigquery.Client:
+def create_client() -> bigquery.Client:
     """
-    Create a BigQuery client using credentials from various sources.
-    
-    Priority order:
-    1. credentials_base64 - Base64 encoded service account JSON
-    2. credentials_json - Raw service account JSON string
-    3. credentials_file - Path to service account JSON file
-    4. credentials_dict - Dict with service account credentials
-    5. settings - Settings object with Google credentials
-    6. Default settings from environment/.env file
-    
+    Create a BigQuery client using credentials from settings.
+
     Returns:
         bigquery.Client: Authenticated BigQuery client
-    
+
     Raises:
         RuntimeError: If no valid credentials are found
     """
-    raw_creds = None
-    
-    # Option 1: Base64 encoded credentials passed directly
-    if credentials_base64:
-        raw_creds = json.loads(base64.urlsafe_b64decode(credentials_base64.encode()).decode())
-    
-    # Option 2: Raw JSON string passed directly
-    elif credentials_json:
-        raw_creds = json.loads(credentials_json)
-    
-    # Option 3: File path passed directly
-    elif credentials_file:
-        with open(credentials_file) as f:
-            raw_creds = json.load(f)
-    
-    # Option 4: Dict passed directly
-    elif credentials_dict:
-        raw_creds = credentials_dict
-    
-    # Option 5: Settings object passed
-    elif settings and settings.has_credentials:
-        if settings.google_application_credentials:
-            with open(settings.google_application_credentials) as f:
-                raw_creds = json.load(f)
-        else:
-            raw_creds = settings.google_credentials
-    
-    # Option 6: Default settings from env/.env
-    elif default_settings.has_credentials:
-        if default_settings.google_application_credentials:
-            with open(default_settings.google_application_credentials) as f:
-                raw_creds = json.load(f)
-        else:
-            raw_creds = default_settings.google_credentials
-    
-    if raw_creds:
-        credentials = service_account.Credentials.from_service_account_info(raw_creds)
-        return bigquery.Client(project=raw_creds['project_id'], credentials=credentials)
-    else:
+    if not settings.has_credentials:
         raise RuntimeError(
-            'No BigQuery credentials found. Provide credentials via:\n'
-            '  - credentials_base64, credentials_json, credentials_file, or credentials_dict parameter\n'
-            '  - Settings object with g_project_id, g_private_key, g_client_email\n'
-            '  - .env file with G_PROJECT_ID, G_PRIVATE_KEY, G_CLIENT_EMAIL'
+            'No BigQuery credentials found. Set one of:\n'
+            '  - BIGQUERY_CREDENTIALS (base64 encoded service account JSON)\n'
+            '  - G_PROJECT_ID, G_PRIVATE_KEY, G_CLIENT_EMAIL (individual fields)'
         )
+
+    creds = settings.google_credentials
+    credentials = service_account.Credentials.from_service_account_info(creds)
+    return bigquery.Client(project=creds['project_id'], credentials=credentials)
 
 
 @dataclass
 class _BQTableViewBase:
     """Base class for BigQuery table and view operations."""
-    
+
     dataset_client: 'DatasetClient'
     model: Type[BQBaseModel]
 
@@ -164,13 +112,13 @@ class _BQTableViewBase:
     ) -> list[Any | dict]:
         """
         Fetch rows from the table/view.
-        
+
         Args:
             fields: List of field names to select (None for all)
             where: WHERE clause condition
             limit: Maximum number of rows to return
             as_objects: If True, return as Pydantic model instances; else as dicts
-            
+
         Returns:
             List of model instances or dicts
         """
@@ -191,13 +139,14 @@ class _BQTableViewBase:
 @dataclass
 class BQView(_BQTableViewBase):
     """BigQuery view wrapper with query support."""
+
     pass
 
 
 @dataclass
 class BQTable(_BQTableViewBase):
     """BigQuery table wrapper with full CRUD support."""
-    
+
     def create(self):
         """Create the table in BigQuery."""
         t = bigquery.Table(self._bq_table_ref, schema=self.model.bq_schema())
@@ -222,11 +171,11 @@ class BQTable(_BQTableViewBase):
     def add_rows(self, *objs: BQBaseModel, send_as_file: bool = True) -> list[dict]:
         """
         Add rows to the table.
-        
+
         Args:
             objs: Pydantic model instances to insert
             send_as_file: If True, use load job (better for large data); else use streaming insert
-            
+
         Returns:
             List of errors (empty if successful)
         """
@@ -271,65 +220,40 @@ class BQTable(_BQTableViewBase):
 class DatasetClient:
     """
     Client for interacting with a BigQuery dataset.
-    
+
     Example:
         >>> client = DatasetClient('my_dataset')
         >>> rows = client.table(MyModel).get_rows(limit=10)
     """
-    
-    def __init__(
-        self,
-        dataset_name: str = None,
-        credentials_base64: str = None,
-        credentials_json: str = None,
-        credentials_file: str = None,
-        credentials_dict: dict = None,
-        settings: Settings = None,
-    ):
+
+    def __init__(self, dataset_name: str = None):
         """
         Initialize dataset client.
-        
+
         Args:
             dataset_name: Name of the BigQuery dataset (or use BQ_DATASET env var)
-            credentials_base64: Base64 encoded service account JSON
-            credentials_json: Raw service account JSON string  
-            credentials_file: Path to service account JSON file
-            credentials_dict: Dict with service account credentials
-            settings: Settings object with Google credentials
         """
-        self._client: bigquery.Client = create_client(
-            credentials_base64=credentials_base64,
-            credentials_json=credentials_json,
-            credentials_file=credentials_file,
-            credentials_dict=credentials_dict,
-            settings=settings,
-        )
-        # Use provided dataset_name, or fall back to settings
-        if dataset_name:
-            self.dataset_name = dataset_name
-        elif settings and settings.bq_dataset:
-            self.dataset_name = settings.bq_dataset
-        elif default_settings.bq_dataset:
-            self.dataset_name = default_settings.bq_dataset
-        else:
+        self._client: bigquery.Client = create_client()
+        self.dataset_name = dataset_name or settings.bq_dataset
+        if not self.dataset_name:
             raise ValueError('dataset_name is required (or set BQ_DATASET env var)')
-        
+
         self.dataset_ref = DatasetReference(self._client.project, self.dataset_name)
 
     def query(self, sql: str) -> list[dict]:
         """
         Execute a raw SQL query.
-        
+
         Args:
             sql: SQL query string
-            
+
         Returns:
             List of result rows as dicts
         """
         result = self._client.query(sql).result()
         return [dict(row) for row in result]
 
-    def add_rows(self, *objs: BQBaseModel, defer: bool = False, job_id: str = None) -> LoadJob:
+    def add_rows(self, *objs: BQBaseModel) -> list[dict]:
         """Add rows to the appropriate table based on model type."""
         table = BQTable(self, type(objs[0]))
         return table.add_rows(*objs)
@@ -358,4 +282,3 @@ class DatasetClient:
         table = self.table(model)
         table.recreate()
         return table
-

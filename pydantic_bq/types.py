@@ -9,6 +9,7 @@ logger = logging.getLogger('pydantic_bq')
 
 class T(str, Enum):
     """BigQuery field types."""
+
     INT = 'INTEGER'
     NUM = 'NUMERIC'
     FLOAT = 'FLOAT'
@@ -26,4 +27,3 @@ def to_str(v) -> str:
         return str(v).lower()
     else:
         return str(v)
-

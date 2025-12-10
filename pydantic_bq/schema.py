@@ -12,14 +12,16 @@ from .types import T
 
 def listify(func):
     """Decorator to convert generator to list."""
+
     def wrapper(*args, **kwargs):
         return list(func(*args, **kwargs))
+
     return wrapper
 
 
 class BQBaseModel(BaseModel):
     """Base model for BigQuery tables with automatic schema generation."""
-    
+
     model_config = ConfigDict(extra='ignore')
 
     @classmethod
@@ -94,4 +96,3 @@ class BQBaseModel(BaseModel):
     class Meta:
         table_id: str = NotImplemented
         table_description: str = ''
-

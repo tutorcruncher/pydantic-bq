@@ -11,9 +11,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file='.env', extra='ignore', case_sensitive=False)
 
-    # BigQuery dataset
-    bq_dataset: str = ''
-
     # Option 1: Base64 encoded credentials (simplest)
     bigquery_credentials: str = ''
 

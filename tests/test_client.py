@@ -80,22 +80,6 @@ class TestDatasetClient:
         assert client.dataset_name == 'my_dataset'
         assert client.dataset_ref.dataset_id == 'my_dataset'
 
-    def test_init_from_settings(self, mock_bq_client, mock_settings_with_creds):
-        """Uses dataset name from settings when not provided."""
-        client = DatasetClient()
-
-        assert client.dataset_name == 'test_dataset'
-
-    def test_init_no_dataset_raises(self, mock_bq_client):
-        """Raises ValueError when no dataset name available."""
-        with patch('pydantic_bq.client.settings') as mock_settings:
-            mock_settings.has_credentials = True
-            mock_settings.bq_dataset = ''
-            mock_settings.google_credentials = {'project_id': 'test'}
-
-            with pytest.raises(ValueError, match='dataset_name is required'):
-                DatasetClient()
-
     def test_query(self, dataset_client):
         """Executes raw SQL query and returns results."""
         mock_result = [MagicMock(), MagicMock()]

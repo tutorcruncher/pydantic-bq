@@ -25,9 +25,6 @@ uv add pydantic-bq
 Create a `.env` file with your BigQuery credentials:
 
 ```bash
-# Dataset name
-BQ_DATASET=my_dataset
-
 # Option 1: Base64-encoded service account JSON (recommended)
 BIGQUERY_CREDENTIALS=eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii...
 
@@ -66,9 +63,6 @@ from pydantic_bq import DatasetClient
 
 # Uses credentials from environment/.env automatically
 client = DatasetClient('my_dataset')
-
-# Or use BQ_DATASET from env
-client = DatasetClient()
 
 # Query rows as Pydantic objects
 events = client.table(UserEvent).get_rows(
@@ -188,7 +182,7 @@ class MyTable(BQBaseModel):
 Main client for BigQuery operations.
 
 ```python
-client = DatasetClient('my_dataset')  # or DatasetClient() to use BQ_DATASET env var
+client = DatasetClient('my_dataset')
 ```
 
 **Methods:**

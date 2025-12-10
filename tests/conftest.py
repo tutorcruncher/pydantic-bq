@@ -39,7 +39,6 @@ def mock_settings_with_creds(sample_credentials):
     """Patch settings with test credentials using individual fields."""
     with patch('pydantic_bq.client.settings') as mock_settings:
         mock_settings.has_credentials = True
-        mock_settings.bq_dataset = 'test_dataset'
         mock_settings.google_credentials = sample_credentials
         yield mock_settings
 
@@ -49,7 +48,6 @@ def mock_settings_no_creds():
     """Patch settings with no credentials."""
     with patch('pydantic_bq.client.settings') as mock_settings:
         mock_settings.has_credentials = False
-        mock_settings.bq_dataset = ''
         yield mock_settings
 
 

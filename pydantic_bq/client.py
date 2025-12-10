@@ -226,17 +226,15 @@ class DatasetClient:
         >>> rows = client.table(MyModel).get_rows(limit=10)
     """
 
-    def __init__(self, dataset_name: str = None):
+    def __init__(self, dataset_name: str):
         """
         Initialize dataset client.
 
         Args:
-            dataset_name: Name of the BigQuery dataset (or use BQ_DATASET env var)
+            dataset_name: Name of the BigQuery dataset
         """
         self._client: bigquery.Client = create_client()
-        self.dataset_name = dataset_name or settings.bq_dataset
-        if not self.dataset_name:
-            raise ValueError('dataset_name is required (or set BQ_DATASET env var)')
+        self.dataset_name = dataset_name
 
         self.dataset_ref = DatasetReference(self._client.project, self.dataset_name)
 

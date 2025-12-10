@@ -7,62 +7,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: make install-dev
-
-      - name: Run linter
-        run: make lint
-
-      - name: Run tests (mocked only)
-        run: make test-cov
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-
-  e2e-test:
-    runs-on: ubuntu-latest
-    # Only run E2E tests on main branch pushes (not PRs) to avoid exposing secrets
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: test
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: make install-dev
-
-      - name: Run E2E tests
-        env:
-          BIGQUERY_CREDENTIALS: ${{ secrets.BIGQUERY_CREDENTIALS }}
-          BQ_DATASET: pydantic_bq_test
-        run: make test-cov-e2e
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
+    uses: ./.github/workflows/_test.yml
+    with:
+      # Run E2E tests only on main branch pushes (not PRs)
+      run_e2e: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit

@@ -4,6 +4,7 @@ A Pydantic-based BigQuery client for type-safe schema definition and data operat
 
 [![CI](https://github.com/tutorcruncher/pydantic-bq/actions/workflows/ci.yml/badge.svg)](https://github.com/tutorcruncher/pydantic-bq/actions/workflows/ci.yml)
 [![PyPI version](https://badge.fury.io/py/pydantic-bq.svg)](https://badge.fury.io/py/pydantic-bq)
+[![codecov](https://codecov.io/github/tutorcruncher/pydantic-bq/graph/badge.svg?token=TH0N896NRU)](https://codecov.io/github/tutorcruncher/pydantic-bq)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 ## Installation

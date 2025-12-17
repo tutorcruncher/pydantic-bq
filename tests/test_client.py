@@ -396,6 +396,26 @@ class TestBQTableGetRows:
         query_call = dataset_client._client.query.call_args[0][0]
         assert 'LIMIT 10' in query_call
 
+    def test_get_rows_with_order_by(self, dataset_client, sample_model):
+        """Includes ORDER BY clause in query."""
+        dataset_client._client.query.return_value.result.return_value = []
+
+        table = dataset_client.table(sample_model)
+        table.get_rows(order_by='created_at DESC')
+
+        query_call = dataset_client._client.query.call_args[0][0]
+        assert 'ORDER BY created_at DESC' in query_call
+
+    def test_get_rows_with_order_by_multiple_columns(self, dataset_client, sample_model):
+        """Includes ORDER BY clause with multiple columns."""
+        dataset_client._client.query.return_value.result.return_value = []
+
+        table = dataset_client.table(sample_model)
+        table.get_rows(order_by='is_active DESC, created_at ASC')
+
+        query_call = dataset_client._client.query.call_args[0][0]
+        assert 'ORDER BY is_active DESC, created_at ASC' in query_call
+
 
 class TestBQTableCountRows:
     """Tests for BQTable.count_rows method."""
@@ -487,6 +507,28 @@ class TestQueryBuilders:
         query = table._select_query(limit=100)
 
         assert 'LIMIT 100' in query
+
+    def test_select_query_with_order_by(self, dataset_client, sample_model):
+        """Builds SELECT with ORDER BY clause."""
+        table = dataset_client.table(sample_model)
+        query = table._select_query(order_by='created_at DESC')
+
+        assert query == 'SELECT * FROM test_dataset.sample_table ORDER BY created_at DESC'
+
+    def test_select_query_with_all_clauses(self, dataset_client, sample_model):
+        """Builds SELECT with WHERE, ORDER BY, and LIMIT clauses in correct order."""
+        table = dataset_client.table(sample_model)
+        query = table._select_query(
+            fields=['code', 'name'],
+            where='is_active = true',
+            order_by='created_at DESC',
+            limit=50,
+        )
+
+        expected = (
+            'SELECT code,name FROM test_dataset.sample_table WHERE is_active = true ORDER BY created_at DESC LIMIT 50'
+        )
+        assert query == expected
 
     def test_count_query(self, dataset_client, sample_model):
         """Builds COUNT query."""

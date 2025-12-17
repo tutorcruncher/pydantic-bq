@@ -73,6 +73,14 @@ class _BQTableViewBase:
     def _bq_table_ref(self) -> TableReference:
         return self.dataset_client.dataset_ref.table(self._table_id)
 
+    @property
+    def _bq_table(self) -> bigquery.Table:
+        return self._bq_client.get_table(self._bq_table_ref)
+
+    @property
+    def schema(self) -> list[bigquery.SchemaField]:
+        return list(self._bq_table.schema)
+
     @classmethod
     def _gen_table_id(cls, table_id):
         # Used to mock tests
@@ -92,11 +100,15 @@ class _BQTableViewBase:
             q += f' WHERE {where}'
         return q
 
-    def _select_query(self, fields: list[str] = None, where: str = None, limit: int = None) -> str:
+    def _select_query(
+        self, fields: list[str] = None, where: str = None, order_by: str = None, limit: int = None
+    ) -> str:
         fields = ','.join(fields) if fields else '*'
         q = f'SELECT {fields} FROM {self.dataset_client.dataset_name}.{self._table_id}'
         if where:
             q += f' WHERE {where}'
+        if order_by:
+            q += f' ORDER BY {order_by}'
         if limit:
             q += f' LIMIT {limit}'
         return q
@@ -108,7 +120,12 @@ class _BQTableViewBase:
         return q
 
     def get_rows(
-        self, fields: list[str] = None, where: str = None, limit: int = None, as_objects: bool = True
+        self,
+        fields: list[str] = None,
+        where: str = None,
+        order_by: str = None,
+        limit: int = None,
+        as_objects: bool = True,
     ) -> list[Any | dict]:
         """
         Fetch rows from the table/view.
@@ -116,13 +133,14 @@ class _BQTableViewBase:
         Args:
             fields: List of field names to select (None for all)
             where: WHERE clause condition
+            order_by: ORDER BY clause (e.g. "created_at DESC")
             limit: Maximum number of rows to return
             as_objects: If True, return as Pydantic model instances; else as dicts
 
         Returns:
             List of model instances or dicts
         """
-        q = self._select_query(fields=fields, where=where, limit=limit)
+        q = self._select_query(fields=fields, where=where, order_by=order_by, limit=limit)
         _rows = self._bq_client.query(q).result()
         if as_objects and not fields:
             return [self.model(**dict(r)) for r in _rows]
@@ -135,12 +153,37 @@ class _BQTableViewBase:
         _rows = self._bq_client.query(q).result()
         return list(dict(next(_rows)).values())[0]
 
+    def delete(self):
+        """Delete the view from BigQuery."""
+        self._bq_client.delete_table(self._bq_table_ref)
+
+    def recreate(self):
+        """Delete and recreate the table."""
+        try:
+            self.delete()
+        except NotFound:
+            pass
+        else:
+            logger.info('table "%s" deleted', self._table_id)
+        self.create()
+
 
 @dataclass
 class BQView(_BQTableViewBase):
     """BigQuery view wrapper with query support."""
 
-    pass
+    def create(self, sql: str):
+        """Create the view in BigQuery with the given SQL."""
+        v = bigquery.Table(self._bq_table_ref)
+        v.view_query = sql
+        v.description = self._table_description
+        self._bq_client.create_table(v)
+        logger.info('view "%s" created', self._table_id)
+
+    @property
+    def view_query(self) -> str:
+        """Get the SQL of the view."""
+        return self._bq_table.view_query
 
 
 @dataclass
@@ -153,20 +196,6 @@ class BQTable(_BQTableViewBase):
         t.description = self._table_description
         self._bq_client.create_table(t)
         logger.info('table "%s" created', self._table_id)
-
-    def delete(self):
-        """Delete the table from BigQuery."""
-        self._bq_client.delete_table(self._bq_table_ref)
-
-    def recreate(self):
-        """Delete and recreate the table."""
-        try:
-            self.delete()
-        except NotFound:
-            pass
-        else:
-            logger.info('table "%s" deleted', self._table_id)
-        self.create()
 
     def add_rows(self, *objs: BQBaseModel, send_as_file: bool = True) -> list[dict]:
         """
@@ -215,6 +244,10 @@ class BQTable(_BQTableViewBase):
         """Delete rows matching the WHERE condition."""
         q = self._delete_query(where=where)
         return self._bq_client.query(q).result()
+
+    def get_schema(self) -> list[bigquery.SchemaField]:
+        """Get the schema of an existing table/view."""
+        return list(self.schema)
 
 
 class DatasetClient:
@@ -274,9 +307,3 @@ class DatasetClient:
         """Delete the table for the given model."""
         table = self.table(model)
         table.delete()
-
-    def recreate_table(self, model: Type[BQBaseModel]) -> BQTable:
-        """Delete and recreate the table for the given model."""
-        table = self.table(model)
-        table.recreate()
-        return table

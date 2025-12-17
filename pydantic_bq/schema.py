@@ -1,6 +1,7 @@
 """Pydantic models for BigQuery schema generation."""
 
 from datetime import date, datetime
+from types import UnionType
 from typing import Iterable, Union, get_args, get_origin
 
 from google.cloud.bigquery import SchemaField
@@ -28,6 +29,9 @@ class BQBaseModel(BaseModel):
     def get_field_type(cls, field_info: FieldInfo) -> T:
         """Determine BigQuery field type from Pydantic field annotation."""
         annotation = field_info.annotation
+
+        if isinstance(annotation, UnionType):
+            raise TypeError('Use Optional[X] or Union[X, None] instead of X | None syntax for field annotations')
 
         if get_origin(annotation) is Union:
             # Dealing with Optional fields

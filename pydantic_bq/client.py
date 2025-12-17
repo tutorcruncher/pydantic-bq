@@ -307,3 +307,9 @@ class DatasetClient:
         """Delete the table for the given model."""
         table = self.table(model)
         table.delete()
+
+    def recreate_table(self, model: Type[BQBaseModel]) -> BQTable:
+        """Delete and recreate the table for the given model."""
+        table = self.table(model)
+        table.recreate()
+        return table

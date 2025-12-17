@@ -69,6 +69,16 @@ class TestJobResult:
         with pytest.raises(ValueError):
             job_result(mock_job)
 
+    def test_job_result_forbidden_non_rate_limit(self):
+        """Non-rate-limit Forbidden errors are silently ignored (returns None)."""
+        mock_job = MagicMock()
+        mock_job.result.side_effect = Forbidden('quotaExceeded')
+
+        result = job_result(mock_job)
+
+        # Current behavior: non-rate-limit Forbidden returns None
+        assert result is None
+
 
 class TestDatasetClient:
     """Tests for DatasetClient initialization and methods."""
@@ -453,6 +463,23 @@ class TestBQTableDeleteRows:
         assert "WHERE code = 'TEST001'" in query_call
 
 
+class TestBQTableGetSchema:
+    """Tests for BQTable.get_schema method."""
+
+    def test_get_schema(self, dataset_client, sample_model):
+        """get_schema returns the table schema."""
+        from google.cloud.bigquery import SchemaField
+
+        mock_schema = [SchemaField('code', 'STRING'), SchemaField('name', 'STRING')]
+        dataset_client._client.get_table.return_value.schema = mock_schema
+
+        table = dataset_client.table(sample_model)
+        schema = table.get_schema()
+
+        assert len(schema) == 2
+        assert schema[0].name == 'code'
+
+
 class TestBQView:
     """Tests for BQView operations."""
 
@@ -475,6 +502,23 @@ class TestBQView:
         count = view.count_rows()
 
         assert count == 100
+
+    def test_view_create(self, dataset_client, sample_model):
+        """View can be created with SQL."""
+        view = dataset_client.view(sample_model)
+        view.create('SELECT * FROM other_table')
+
+        dataset_client._client.create_table.assert_called_once()
+        created_view = dataset_client._client.create_table.call_args[0][0]
+        assert created_view.view_query == 'SELECT * FROM other_table'
+        assert created_view.description == 'A sample table for testing'
+
+    def test_view_query_property(self, dataset_client, sample_model):
+        """view_query returns the SQL of the view."""
+        dataset_client._client.get_table.return_value.view_query = 'SELECT * FROM source'
+
+        view = dataset_client.view(sample_model)
+        assert view.view_query == 'SELECT * FROM source'
 
 
 class TestQueryBuilders:
@@ -551,3 +595,10 @@ class TestQueryBuilders:
 
         assert 'DELETE FROM test_dataset.sample_table' in query
         assert 'WHERE id = 1' in query
+
+    def test_delete_query_no_where(self, dataset_client, sample_model):
+        """Builds DELETE query without WHERE clause."""
+        table = dataset_client.table(sample_model)
+        query = table._delete_query()
+
+        assert query == 'DELETE FROM test_dataset.sample_table'

@@ -87,6 +87,17 @@ class TestGetFieldType:
         field_info = AllTypesModel.model_fields['enum_field']
         assert AllTypesModel.get_field_type(field_info) == T.STR
 
+    def test_union_type_syntax_raises_error(self):
+        """Using X | None syntax raises TypeError."""
+        import pytest
+        from pydantic.fields import FieldInfo
+
+        # Create a FieldInfo with UnionType annotation (X | None syntax)
+        field_info = FieldInfo(annotation=str | None)
+
+        with pytest.raises(TypeError, match='Use Optional'):
+            AllTypesModel.get_field_type(field_info)
+
 
 class TestGetFieldMode:
     """Tests for get_field_mode method."""

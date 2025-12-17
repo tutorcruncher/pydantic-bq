@@ -16,7 +16,7 @@ class T(str, Enum):
     STR = 'STRING'
     TS = 'TIMESTAMP'
     DATE = 'DATE'
-    BOOL = 'BOOLEAN'
+    BOOL = 'BOOL'
 
 
 def to_str(v) -> str:

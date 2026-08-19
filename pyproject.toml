@@ -31,7 +31,7 @@ dev = [
     "pytest>=9.0",
     "pytest-cov>=7.0",
     "pytest-sugar==1.1.1",
-    "ruff>=0.14",
+    "ruff>=0.14,<0.15",
     "coverage>=7.13",
 ]
 

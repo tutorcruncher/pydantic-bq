@@ -2,13 +2,24 @@
 
 from datetime import date, datetime
 from types import UnionType
-from typing import Iterable, Union, get_args, get_origin
+from typing import Any, Iterable, Union, get_args, get_origin
 
 from google.cloud.bigquery import SchemaField
 from pydantic import BaseModel, ConfigDict
 from pydantic.fields import FieldInfo
 
 from .types import T
+
+
+def unwrap_optional(annotation: Any) -> tuple[Any, bool]:
+    """Unwrap Optional[X], Union[X, None] and X | None to X, and whether it was optional."""
+    if get_origin(annotation) is not Union and not isinstance(annotation, UnionType):
+        return annotation, False
+    args = get_args(annotation)
+    assert len(args) == 2 and args[1] is type(None), (
+        f'Only unions of the form Optional[X] are supported, got {annotation}'
+    )
+    return args[0], True
 
 
 def listify(func):
@@ -28,19 +39,10 @@ class BQBaseModel(BaseModel):
     @classmethod
     def get_field_type(cls, field_info: FieldInfo) -> T:
         """Determine BigQuery field type from Pydantic field annotation."""
-        annotation = field_info.annotation
-
-        if isinstance(annotation, UnionType):
-            raise TypeError('Use Optional[X] or Union[X, None] instead of X | None syntax for field annotations')
-
-        if get_origin(annotation) is Union:
-            # Dealing with Optional fields
-            annotations = get_args(annotation)
-            assert annotations[1] is type(None)
-            annotation = get_args(annotation)[0]
+        annotation, _ = unwrap_optional(field_info.annotation)
 
         if get_origin(annotation) is list:
-            annotation = get_args(annotation)[0]
+            annotation, _ = unwrap_optional(get_args(annotation)[0])
 
         if annotation is str:
             return T.STR
@@ -61,14 +63,7 @@ class BQBaseModel(BaseModel):
     @classmethod
     def get_field_mode(cls, field_info: FieldInfo) -> str:
         """Determine BigQuery field mode from Pydantic field annotation."""
-        is_optional = False
-        annotation = field_info.annotation
-        if get_origin(annotation) is Union:
-            # Dealing with Optional fields
-            annotations = get_args(annotation)
-            assert annotations[1] is type(None)
-            annotation = get_args(annotation)[0]
-            is_optional = True
+        annotation, is_optional = unwrap_optional(field_info.annotation)
         if get_origin(annotation) is list:
             return 'REPEATED'
         elif is_optional:

@@ -2,8 +2,9 @@
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
+import pytest
 from pydantic import Field
 
 from pydantic_bq.schema import BQBaseModel
@@ -30,6 +31,25 @@ class AllTypesModel(BQBaseModel):
     list_str: list[str] = []
     enum_field: Status = Status.ACTIVE
     optional_int: Optional[int] = None
+
+    class Meta:
+        table_id = 'all_types'
+        table_description = 'Test table with all types'
+
+
+class PEP604Model(BQBaseModel):
+    """Mirror of AllTypesModel using X | None instead of Optional[X]."""
+
+    str_field: str
+    int_field: int
+    float_field: float
+    bool_field: bool
+    datetime_field: datetime
+    date_field: date
+    optional_str: str | None = None
+    list_str: list[str] = []
+    enum_field: Status = Status.ACTIVE
+    optional_int: int | None = None
 
     class Meta:
         table_id = 'all_types'
@@ -87,16 +107,35 @@ class TestGetFieldType:
         field_info = AllTypesModel.model_fields['enum_field']
         assert AllTypesModel.get_field_type(field_info) == T.STR
 
-    def test_union_type_syntax_raises_error(self):
-        """Using X | None syntax raises TypeError."""
-        import pytest
-        from pydantic.fields import FieldInfo
+    def test_pep604_optional_unwraps_type(self):
+        """X | None unwraps to X's type."""
+        assert PEP604Model.get_field_type(PEP604Model.model_fields['optional_str']) == T.STR
+        assert PEP604Model.get_field_type(PEP604Model.model_fields['optional_int']) == T.INT
 
-        # Create a FieldInfo with UnionType annotation (X | None syntax)
-        field_info = FieldInfo(annotation=str | None)
+    def test_pep604_optional_inside_list(self):
+        """list[X | None] unwraps to X's type."""
 
-        with pytest.raises(TypeError, match='Use Optional'):
-            AllTypesModel.get_field_type(field_info)
+        class ListOptionalModel(BQBaseModel):
+            values: list[datetime | None] = []
+
+        assert ListOptionalModel.get_field_type(ListOptionalModel.model_fields['values']) == T.TS
+
+    def test_explicit_union_with_none(self):
+        """Union[X, None] unwraps to X's type."""
+
+        class ExplicitUnionModel(BQBaseModel):
+            value: Union[date, None] = None
+
+        assert ExplicitUnionModel.get_field_type(ExplicitUnionModel.model_fields['value']) == T.DATE
+
+    def test_non_optional_union_raises(self):
+        """Unions that aren't Optional[X] are unsupported."""
+
+        class MultiUnionModel(BQBaseModel):
+            value: int | str = 0
+
+        with pytest.raises(AssertionError, match='Only unions of the form'):
+            MultiUnionModel.get_field_type(MultiUnionModel.model_fields['value'])
 
 
 class TestGetFieldMode:
@@ -116,6 +155,11 @@ class TestGetFieldMode:
         """List fields are REPEATED."""
         field_info = AllTypesModel.model_fields['list_str']
         assert AllTypesModel.get_field_mode(field_info) == 'REPEATED'
+
+    def test_pep604_optional_field(self):
+        """X | None fields are NULLABLE."""
+        assert PEP604Model.get_field_mode(PEP604Model.model_fields['optional_str']) == 'NULLABLE'
+        assert PEP604Model.get_field_mode(PEP604Model.model_fields['optional_int']) == 'NULLABLE'
 
 
 class TestBQSchema:
@@ -167,6 +211,10 @@ class TestBQSchema:
 
         schema = DescribedModel.bq_schema()
         assert schema[0].description == 'The name of the item'
+
+    def test_pep604_schema_matches_optional(self):
+        """X | None produces an identical schema to Optional[X]."""
+        assert PEP604Model.bq_schema() == AllTypesModel.bq_schema()
 
     def test_listify_decorator(self):
         """bq_schema returns a list, not a generator."""
